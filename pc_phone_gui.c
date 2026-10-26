@@ -177,6 +177,7 @@ static GtkListStore *contacts_store;
 static GtkWidget *recent_view;
 static GtkListStore *recent_store;
 static GtkWidget *log_view;
+static GtkWidget *dial_entry = NULL;
 static GtkTextBuffer *log_buffer;
 static GtkWidget *spinner;
 
@@ -601,7 +602,7 @@ static void save_settings(void) {
     fclose(f);
 }
 
-// Autostart yönetimi
+// Autostart management
 static gboolean is_autostart_enabled(void) {
     char path[512];
     const char *home = getenv("HOME");
@@ -620,10 +621,10 @@ static void set_autostart(gboolean enable) {
     snprintf(autostart_file, sizeof(autostart_file), "%s/pcphone.desktop", autostart_dir);
     
     if (enable) {
-        // Dizin yoksa oluştur
+        // Create directory if missing
         mkdir(autostart_dir, 0755);
         
-        // .desktop dosyası oluştur
+        // Create .desktop file
         FILE *f = fopen(autostart_file, "w");
         if (f) {
             fprintf(f, "[Desktop Entry]\n");
@@ -641,7 +642,7 @@ static void set_autostart(gboolean enable) {
             autostart_enabled = TRUE;
         }
     } else {
-        // Dosyayı sil
+        // Delete file
         unlink(autostart_file);
         autostart_enabled = FALSE;
     }
@@ -660,7 +661,7 @@ static void on_window_destroy(GtkWidget *widget, gpointer data) {
     save_settings();
 }
 
-// Sütun genişlik değişim callback'leri
+// Column width change callbacks
 static void on_col_recent_type_width(GObject *obj, GParamSpec *pspec, gpointer data) {
     (void)pspec; (void)data;
     col_recent_type = gtk_tree_view_column_get_width(GTK_TREE_VIEW_COLUMN(obj));
@@ -4460,7 +4461,7 @@ static void create_ui(void) {
     GtkWidget *dialpad_page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
     gtk_container_set_border_width(GTK_CONTAINER(dialpad_page), 8);
     
-    GtkWidget *dial_entry = gtk_entry_new();
+    dial_entry = gtk_entry_new();
     gtk_entry_set_placeholder_text(GTK_ENTRY(dial_entry), "Enter number...");
     gtk_entry_set_alignment(GTK_ENTRY(dial_entry), 0.5);
     gtk_widget_set_size_request(dial_entry, -1, 40);
@@ -4661,31 +4662,30 @@ static void create_ui(void) {
 static void on_app_activate(GtkApplication *application, gpointer user_data) {
     (void)user_data;
     
-    // Eğer pencere zaten varsa, öne getir
+    // If window already exists, bring to front
     if (window) {
         gtk_window_present(GTK_WINDOW(window));
         
-        // Eğer tel: URI ile çağrıldıysa, numarayı işle
+            // Write number from tel: URI into input field
         if (pending_uri_arg[0] != '\0') {
             strncpy(pending_dial_number, pending_uri_arg, 63);
             pending_dial_number[63] = '\0';
             pending_uri_arg[0] = '\0';
-            
-            // Eğer bağlıysa hemen ara
-            if (current_state == STATE_CONNECTED && hfp_socket >= 0) {
-                dial_number(pending_dial_number);
-                pending_dial_number[0] = '\0';
+
+            if (dial_entry) {
+                gtk_entry_set_text(GTK_ENTRY(dial_entry), pending_dial_number);
             }
+            pending_dial_number[0] = '\0';
         }
         return;
     }
     
-    // İlk açılış - UI oluştur
+    // First launch - create UI
     load_settings();
     apply_css();
     create_ui();
     
-    // Pencereyi uygulamaya bağla
+    // Bind window to application
     gtk_application_add_window(application, GTK_WINDOW(window));
 
     // Fast loading from CSV
@@ -4710,6 +4710,17 @@ static void on_app_activate(GtkApplication *application, gpointer user_data) {
     refresh_contacts_view();
     refresh_recents_view();
 
+    // Write number received via tel: URI into input field
+    if (pending_uri_arg[0] != '\0') {
+        strncpy(pending_dial_number, pending_uri_arg, 63);
+        pending_dial_number[63] = '\0';
+        pending_uri_arg[0] = '\0';
+        if (dial_entry) {
+            gtk_entry_set_text(GTK_ENTRY(dial_entry), pending_dial_number);
+        }
+        pending_dial_number[0] = '\0';
+    }
+
     if (!init_dbus()) {
         set_state(STATE_ERROR);
     } else {
@@ -4733,7 +4744,7 @@ static void on_app_command_line(GApplication *application, GApplicationCommandLi
     gint argc;
     argv = g_application_command_line_get_arguments(cmdline, &argc);
     
-    // tel: URI kontrolü
+    // Check tel: URI
     if (argc > 1 && argv[1]) {
         const char *arg = argv[1];
         if (strncmp(arg, "tel:", 4) == 0) {
@@ -4771,7 +4782,7 @@ int main(int argc, char *argv[]) {
         flags |= G_APPLICATION_NON_UNIQUE;
     }
     
-    // GtkApplication oluştur
+    // Create GtkApplication
     app = gtk_application_new("com.ancientcoder.pcphone", flags);
     
     g_signal_connect(app, "activate", G_CALLBACK(on_app_activate), NULL);
