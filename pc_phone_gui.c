@@ -4502,6 +4502,7 @@ static void create_ui(void) {
     gtk_style_context_add_class(ctx, "btn-start");
     g_object_set_data(G_OBJECT(call_btn), "entry", dial_entry);
     g_signal_connect(call_btn, "clicked", G_CALLBACK(on_dial_call_clicked), dial_entry);
+    g_signal_connect(dial_entry, "activate", G_CALLBACK(on_dial_call_clicked), dial_entry);
     gtk_box_pack_start(GTK_BOX(dialpad_page), call_btn, FALSE, FALSE, 0);
 
     gtk_notebook_append_page(GTK_NOTEBOOK(notebook), dialpad_page, 
@@ -4683,6 +4684,7 @@ static void on_app_activate(GtkApplication *application, gpointer user_data) {
 
             if (dial_entry) {
                 gtk_entry_set_text(GTK_ENTRY(dial_entry), pending_dial_number);
+                gtk_widget_grab_focus(dial_entry);
             }
             pending_dial_number[0] = '\0';
         }
@@ -4726,6 +4728,7 @@ static void on_app_activate(GtkApplication *application, gpointer user_data) {
         pending_uri_arg[0] = '\0';
         if (dial_entry) {
             gtk_entry_set_text(GTK_ENTRY(dial_entry), pending_dial_number);
+            gtk_widget_grab_focus(dial_entry);
         }
         pending_dial_number[0] = '\0';
     }
